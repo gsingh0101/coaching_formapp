@@ -56,6 +56,9 @@ export default function UserForm() {
 
   // from here we connect to the backend api to submit the form data.
   const submitForm = async (formData: any): Promise<any> => {
+
+    console.log("Submitting form data:", JSON.stringify(formData));
+
     try {
       const res = await fetch("/api/users", {
         method: "POST",
@@ -77,9 +80,11 @@ export default function UserForm() {
       return { success: true, message: "User added successfully!" };
 
     } catch (error: any) {
+
       console.error("Add error:", error)
       return { success: false, message: "User could not be added successfully, error: " + error.message + " Technical details: " + error.error };
       // throw error;
+      
     }
   }
 
@@ -97,7 +102,7 @@ export default function UserForm() {
 
     try {
       // Call API
-      const result = await submitForm(formData);
+      const result = await submitForm(formData); // main submit form call, it will return { success: true/false, message: "some message" }
 
       if (!result.success) {
         setErrors({ general: result.message });

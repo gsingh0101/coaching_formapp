@@ -25,7 +25,13 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const name = String(body?.name || "Unknown name").trim()
-    if (!name) return NextResponse.json({ message: "name is required" }, { status: 400 })
+    if (!name) return NextResponse.json({ message: "name is required" }, { status: 400 });
+
+    // WRITE A CODE TO FIND THE EMAIL IN THE DATABASE, IF FOUND THEN RETURN ERROR RESPONSE WITH MESSAGE "Email already exists"
+    const existingUser = await UserModel.findOne({ email: body.email });
+    if (existingUser) {
+      return NextResponse.json({ message: "Email already exists" }, { status: 400 });
+    }
 
     const doc = await UserModel.create({
       name,
