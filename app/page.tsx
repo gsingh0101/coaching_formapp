@@ -1,182 +1,169 @@
 "use client"
 
-import React, { useState } from 'react';
-
-// import { submitForm } from '../services/api';
+import React, { useEffect, useState } from 'react';
 
 export default function UserForm() {
 
-  const [formData, setFormData] = useState<any>(
-    {
-      name: '',
-      email: '',
-      password: '',
-      dob: ''
-    }
-  );
+  const emptyForm = { name: '', email: '', password: '', dob: '' };
+
+  const [formData, setFormData] = useState<any>(emptyForm);
+  const [users, setUsers] = useState<any[]>([]);
+  const [editId, setEditId] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
-
   const [errors, setErrors] = useState<any>({});
 
+  // ✅ Load users
+  const fetchUsers = async () => {
+    const res = await fetch("/api/users");
+    const data = await res.json();
+    if (data.success) setUsers(data.data);
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
   const handleChange = (e: any) => {
-    setFormData(
-      { // OBJECT STARTS
-        ...formData,
-        [e.target.name]: e.target.value
-      } // OBJECT ENDS
-    );
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const validateForm = () => {
     let newErrors: any = {};
-    // Name validation
-    if (!formData.name.trim()) {
-      newErrors.name = 'Name is required';
-    }
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      newErrors.email = 'Invalid email format';
-    }
+    if (!formData.name.trim()) newErrors.name = 'Name is required';
+    if (!formData.email) newErrors.email = 'Email required';
+    if (formData.password.length < 6) newErrors.password = 'Password min 6 chars';
+    if (!formData.dob) newErrors.dob = 'DOB required';
 
-    // Password validation
-    if (formData.password.length < 6) {
-      newErrors.password = 'Password must be 6 characters';
-    }
-    // DOB validation
-    if (!formData.dob) {
-      newErrors.dob = 'Date of birth is required';
-    }
-    console.log("validation errors", newErrors);
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // from here we connect to the backend api to submit the form data.
-  const submitForm = async (formData: any): Promise<any> => {
-
-    console.log("Submitting form data:", JSON.stringify(formData));
-
-    try {
-      const res = await fetch("/api/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      })
-
-      console.log(res);
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        console.log("errorData", errorData);
-        return { success: false, message: errorData.message + " Technical details: " + errorData.error  || "Failed to add user" };
-      }
-
-      const newUser = await res.json();
-
-      setFormData({ name: '', email: '', password: '', dob: '' });
-      return { success: true, message: "User added successfully!" };
-
-    } catch (error: any) {
-
-      console.error("Add error:", error)
-      return { success: false, message: "User could not be added successfully, error: " + error.message + " Technical details: " + error.error };
-      // throw error;
-      
-    }
-  }
-
-
   const handleSubmit = async (e: any) => {
     e.preventDefault();
-    // Client-side validation
-    const valid = validateForm();
-    if (!valid) return; // return from here because of validation errors.
+    if (!validateForm()) return;
 
-    // here there is no error
-    setSuccessMessage("Processing ...");
     setIsSubmitting(true);
-    setErrors({});
+    setSuccessMessage("");
 
     try {
-      // Call API
-      const result = await submitForm(formData); // main submit form call, it will return { success: true/false, message: "some message" }
+      const url = editId ? `/api/users?id=${editId}` : "/api/users";
+      const method = editId ? "PATCH" : "POST";
 
-      if (!result.success) {
-        setErrors({ general: result.message });
-        setSuccessMessage("");
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData)
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErrors({ general: data.message });
         return;
       }
-      
-      // Success
-      setErrors({});
-      setSuccessMessage(result.message);
-      setFormData({ name: '', email: '', password: '', dob: '' });
 
-    } catch (error: any) {
-      // Handle API errors (including backend validation
-      if (typeof error === 'object') {
-        setErrors(error); // Backend validation errors
-      } else {
-        setErrors({ general: error.message });
-      }
+      setSuccessMessage(editId ? "User updated!" : "User added!");
+      setFormData(emptyForm);
+      setEditId(null);
+      fetchUsers();
+
+    } catch (err: any) {
+      setErrors({ general: err.message });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleEdit = (user: any) => {
+    setFormData({
+      name: user.name,
+      email: user.email,
+      password: user.password,
+      dob: user.dob?.substring(0, 10)
+    });
+    setEditId(user._id);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this user?")) return;
+
+    await fetch(`/api/users?id=${id}`, { method: "DELETE" });
+    fetchUsers();
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 max-w-md mx-auto mt-10 p-6 rounded shadow">
-      <div className="space-y-4 p-4 border border-gray-300 rounded">
+    <div className="max-w-3xl mx-auto mt-10 space-y-10">
 
-        <h3 className="text-2xl font-bold">User form</h3>
+      {/* FORM */}
+      <form onSubmit={handleSubmit} className="p-6 border rounded space-y-4">
 
-        <div className="text-green-600 font-bold">{successMessage}</div>
-        {errors.general && <div className="text-red-700">{errors.general}</div>}
+        <h2 className="text-xl font-bold">
+          {editId ? "Edit User" : "Add User"}
+        </h2>
 
-        <div>
-          <label>Name:</label>
-          <input type="text" name="name"
-            value={formData.name}
-            onChange={handleChange} />
-          {errors.name && <div className="text-red-700">{errors.name}</div>}
-        </div>
+        {successMessage && <div className="text-green-600">{successMessage}</div>}
+        {errors.general && <div className="text-red-600">{errors.general}</div>}
 
-        <div>
-          <label>Email:</label>
-          <input type="email" name="email"
-            value={formData.email}
-            onChange={handleChange} />
-          {errors.email && <div className="text-red-700">{errors.email}</div>}
-        </div>
+        <input name="name" placeholder="Name"
+          value={formData.name}
+          onChange={handleChange}
+          className="border p-2 w-full" />
 
-        <div>
-          <label>password:</label>
-          <input type="password" name="password"
-            value={formData.password}
-            onChange={handleChange} />
-          {errors.password && <div className="text-red-700">{errors.password}</div>}
-        </div>
+        <input name="email" placeholder="Email"
+          value={formData.email}
+          onChange={handleChange}
+          className="border p-2 w-full" />
 
-        <div>
-          <label>dob:</label>
-          <input type="date" name="dob"
-            value={formData.dob}
-            onChange={handleChange} />
-          {errors.dob && <div className="text-red-700">{errors.dob}</div>}
-        </div>
+        <input type="password" name="password" placeholder="Password"
+          value={formData.password}
+          onChange={handleChange}
+          className="border p-2 w-full" />
 
+        <input type="date" name="dob"
+          value={formData.dob}
+          onChange={handleChange}
+          className="border p-2 w-full" />
 
-        <button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-400">
-          {isSubmitting ? 'Submitting...' : 'Submit'}
+        <button disabled={isSubmitting}
+          className="bg-blue-600 text-white px-4 py-2 rounded">
+          {editId ? "Update" : "Submit"}
         </button>
+      </form>
 
+
+      {/* USER LIST */}
+      <div className="border p-6 rounded">
+        <h2 className="text-xl font-bold mb-4">Users</h2>
+
+        {users.map((user) => (
+          <div key={user._id}
+            className="flex justify-between border-b py-2">
+
+            <div>
+              <div><strong>{user.name}</strong></div>
+              <div>{user.email}</div>
+            </div>
+
+            <div className="space-x-2">
+              <button
+                onClick={() => handleEdit(user)}
+                className="bg-yellow-500 text-white px-2 py-1 rounded">
+                Edit
+              </button>
+
+              <button
+                onClick={() => handleDelete(user._id)}
+                className="bg-red-600 text-white px-2 py-1 rounded">
+                Delete
+              </button>
+            </div>
+
+          </div>
+        ))}
       </div>
 
-
-
-    </form>
+    </div>
   );
 }

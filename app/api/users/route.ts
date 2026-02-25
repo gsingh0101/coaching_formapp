@@ -2,32 +2,47 @@ import { UserModel } from '@/lib/models/users';
 import { connectDB } from "@/lib/db/connect"
 import { NextRequest, NextResponse } from 'next/server';
 
-// the url <websitename>/api/users/<id> will trigger this code
-// the url <websitename>/api/users?id=userid will trigger this code
 
+// ✅ GET (All or Single)
+// if id is passed return that user
+// if no id is passed return the applicable users
 export async function GET(req: NextRequest) {
   try {
-    await connectDB()
+    await connectDB();
 
-    const users = await UserModel.find({})
-    return NextResponse.json({ success: true, data: users })
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+
+    if (id) {
+      const user = await UserModel.findById(id);
+      if (!user) {
+        return NextResponse.json({ success: false, message: "User not found" }, { status: 404 });
+      }
+      return NextResponse.json({ success: true, data: user });
+    }
+
+    // return all users
+    const users = await UserModel.find({}).sort({ createdAt: -1 });
+    return NextResponse.json({ success: true, data: users });
+
   } catch (error) {
-    console.error('Error fetching users:', error);
-    return new Response(JSON.stringify({ success: false, message: 'Failed to fetch users' }), { status: 500 });
+    return NextResponse.json({ success: false, message: "Failed to fetch users" }, { status: 500 });
   }
 }
 
+
+// ✅ POST (Create)
 export async function POST(req: NextRequest) {
   try {
+    await connectDB();
 
-    // connect to database
-    await connectDB(); // it will throw in case of error
+    const body = await req.json();
+    const name = String(body?.name || "").trim();
 
-    const body = await req.json()
-    const name = String(body?.name || "Unknown name").trim()
-    if (!name) return NextResponse.json({ message: "name is required" }, { status: 400 });
+    if (!name) {
+      return NextResponse.json({ message: "Name is required" }, { status: 400 });
+    }
 
-    // WRITE A CODE TO FIND THE EMAIL IN THE DATABASE, IF FOUND THEN RETURN ERROR RESPONSE WITH MESSAGE "Email already exists"
     const existingUser = await UserModel.findOne({ email: body.email });
     if (existingUser) {
       return NextResponse.json({ message: "Email already exists" }, { status: 400 });
@@ -40,11 +55,92 @@ export async function POST(req: NextRequest) {
       password: body.password,
     });
 
-    return NextResponse.json({ id: String(doc._id), name: doc.name, email: doc.email, dob: doc.dob });
+    return NextResponse.json({
+      success: true,
+      id: String(doc._id),
+      name: doc.name,
+      email: doc.email,
+      dob: doc.dob
+    });
 
   } catch (err: any) {
+    return NextResponse.json({ message: "Server error", error: err?.message }, { status: 500 });
+  }
+}
 
-    return NextResponse.json({ message: "Server error", error: err?.message || String(err) }, { status: 500 });
 
+// ✅ PATCH (Update)
+export async function PATCH(req: NextRequest) {
+  try {
+    await connectDB();
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ message: "User ID required" }, { status: 400 });
+    }
+
+    const body = await req.json();
+
+    // Check email uniqueness (if email changed)
+    if (body.email) {
+      const existingUser = await UserModel.findOne({
+        email: body.email,
+        _id: { $ne: id }
+      });
+
+      if (existingUser) {
+        return NextResponse.json({ message: "Email already exists" }, { status: 400 });
+      }
+    }
+
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      id,
+      {
+        name: body.name,
+        email: body.email,
+        dob: body.dob,
+        password: body.password,
+      },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, data: updatedUser });
+
+  } catch (error: any) {
+
+    return NextResponse.json({ message: "Update failed", error: error.message }, { status: 500 });
+
+  }
+}
+
+
+// ✅ DELETE
+export async function DELETE(req: NextRequest) {
+  try {
+    await connectDB();
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ message: "User ID required" }, { status: 400 });
+    }
+
+    const deletedUser = await UserModel.findByIdAndDelete(id);
+
+    if (!deletedUser) {
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, message: "User deleted successfully" });
+
+  } catch (error: any) {
+    return NextResponse.json({ message: "Delete failed", error: error.message }, { status: 500 });
   }
 }
