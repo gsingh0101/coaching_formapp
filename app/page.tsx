@@ -18,7 +18,11 @@ export default function UserForm() {
   const fetchUsers = async () => {
     const res = await fetch("/api/users");
     const data = await res.json();
-    if (data.success) setUsers(data.data);
+    if (data.success) {
+      setUsers(data.data);
+    } else {
+      setErrors({ general: "Could not fetch users" });
+    }
   };
 
   useEffect(() => {
@@ -89,7 +93,10 @@ export default function UserForm() {
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this user?")) return;
 
-    await fetch(`/api/users?id=${id}`, { method: "DELETE" });
+    await fetch(`/api/users?id=${id}`, { 
+      method: "DELETE" 
+    });
+    
     fetchUsers();
   };
 

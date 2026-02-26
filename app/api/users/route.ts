@@ -1,3 +1,7 @@
+import { requireAuth } from "@/lib/requireAuth";
+
+import bcrypt from "bcryptjs";
+
 import { UserModel } from '@/lib/models/users';
 import { connectDB } from "@/lib/db/connect"
 import { NextRequest, NextResponse } from 'next/server';
@@ -34,6 +38,9 @@ export async function GET(req: NextRequest) {
 // ✅ POST (Create)
 export async function POST(req: NextRequest) {
   try {
+
+    requireAuth(); // 👈 protect ediitng users
+
     await connectDB();
 
     const body = await req.json();
@@ -48,10 +55,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: "Email already exists" }, { status: 400 });
     }
 
+    const hashedPassword = await bcrypt.hash(body.password, 10);
+
     const doc = await UserModel.create({
       name,
       email: body.email,
       dob: body.dob,
+      //password: hashedPassword,
       password: body.password,
     });
 
@@ -72,10 +82,16 @@ export async function POST(req: NextRequest) {
 // ✅ PATCH (Update)
 export async function PATCH(req: NextRequest) {
   try {
+
+    requireAuth(); // 👈 protect ediitng users
+   
+    console.log("Updating user... requireAuth ok"); // Debug log
+    
+
     await connectDB();
 
     const { searchParams } = new URL(req.url);
-    const id = searchParams.get("id");
+    const id = searchParams.get("id"); // get id from the URL query parameter, e.g. /api/users?id=12345
 
     if (!id) {
       return NextResponse.json({ message: "User ID required" }, { status: 400 });
@@ -132,7 +148,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ message: "User ID required" }, { status: 400 });
     }
 
-    const deletedUser = await UserModel.findByIdAndDelete(id);
+    const deletedUser = await UserModel.findByIdAndDelete(id); // this is HARD DELETE. for production, consider soft delete (e.g. set a "deleted" flag instead of actually deleting the record)
 
     if (!deletedUser) {
       return NextResponse.json({ message: "User not found" }, { status: 404 });
